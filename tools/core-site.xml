@@ -1,0 +1,6 @@
+<configuration>
+  <property>
+    <name>parquet.strings.signed-min-max.enabled</name>
+    <value>true</value>
+  </property>
+</configuration>

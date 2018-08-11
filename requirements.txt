@@ -1,0 +1,7 @@
+logging
+argparse
+findspark
+pytest
+typing
+flake8
+psutil
