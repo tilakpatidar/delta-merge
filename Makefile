@@ -20,7 +20,7 @@ clean-build: clean-pyc
 	rm -rf .pytest_cache
 
 test: clean-pyc clean-build
-	py.test --verbose --color=yes tests/
+	py.test --verbose --color=yes $(TEST_PATH) test/
 
 setup:
 	build_scripts/setup.sh

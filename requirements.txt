@@ -5,3 +5,4 @@ pytest
 typing
 flake8
 psutil
+pandas

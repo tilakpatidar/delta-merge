@@ -13,6 +13,7 @@ source .env
 curl https://bootstrap.pypa.io/get-pip.py | python
 pip install -r requirements.txt
 
+echo "$PWD/scripts/lib_python" > env/lib/python2.7/site-packages/lib_python.pth
 echo $SPARK_HOME/python > env/lib/python2.7/site-packages/pyspark.pth
 
 # Install spark2.3
