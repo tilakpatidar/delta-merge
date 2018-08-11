@@ -19,25 +19,23 @@ def main(context, options):
     [input_path,
      input_file_type,
      input_pk_columns,
+     input_opts,
      output_path,
      output_path_bad,
      output_path_delta,
      output_file_type,
-     output_file_type_bad,
-     output_file_type_delta,
      partition_column,
-     partition_column_bad,
-     partition_column_delta,
-     write_mode,
-     write_mode_bad,
-     write_mode_delta] = read_options_or_load_defaults(options)
+     write_mode] = read_options_or_load_defaults(options)
 
     print "Input path %s" % input_path
     print "Output path %s" % output_path
     print "Output Bad path %s" % output_path_bad
     print "Output Delta path %s" % output_path_delta
 
-    history = hive_context.read.format(input_file_type).load(input_path)
+    read_format = hive_context.read.format(input_file_type)
+    for k in input_opts:
+        read_format = read_format.option(k, input_opts[k])
+    history = read_format.load(input_path)
 
     snapshot, bad, deltas_till_file = compute_snapshot_and_bad_records(history, input_pk_columns, sc, hive_context)
     latest_snapshot_id = _generate_latest_snapshot_id(deltas_till_file)
@@ -49,7 +47,7 @@ def main(context, options):
 
     # write the good df and bad df
     write_df(snapshot, write_mode, partition_column, output_file_type, output_path)
-    write_df(bad, write_mode_bad, partition_column_bad, output_file_type_bad, output_path_bad)
+    write_df(bad, write_mode, partition_column, output_file_type, output_path_bad)
 
     # Use the snapshot and bad written on disk
     costs_snapshot_on_disk = hive_context.read.format(output_file_type).load(output_path)
@@ -57,30 +55,27 @@ def main(context, options):
     _copy_new_snapshot_to_history(costs_snapshot_on_disk, input_file_type, input_path)
 
     delta = _generate_deltas(costs_snapshot_on_disk, deltas_till_file, hive_context, sc)
-    write_df(delta, write_mode_delta, partition_column_delta, output_file_type_delta, output_path_delta)
+    write_df(delta, write_mode, partition_column, output_file_type, output_path_delta)
 
 
 def read_options_or_load_defaults(options):
-    default_output_file_format = ["parquet", "parquet", "parquet"]
-    default_write_mode = ["overwrite", "overwrite", "overwrite"]
+    default_output_file_format = "parquet"
+    default_write_mode = "overwrite"
     input_path = options["input_path"]  # type: str
     input_file_type = options.get("input_file_type", "parquet")  # type: str
-    input_pk_columns = options.get("input_pk_columns", [])  # type: str
+    input_pk_columns = options.get("input_pk_columns", {})  # type: str
+    input_opts = options.get("input_options", {})  # type: str
     output_path = options.get("output_path")  # type: str
     output_path_bad = options.get("output_path_bad")  # type: str
     output_path_delta = options.get("output_path_delta")  # type: str
-    partition_column, partition_column_bad, partition_column_delta = \
-        options.get("partition_column", [None, None, None])  # type: str
-    output_file_type, output_file_type_bad, output_file_type_delta = \
-        options.get("output_file_type", default_output_file_format)  # type: str
-    write_mode, write_mode_bad, write_mode_delta = \
-        options.get("write_mode", default_write_mode)  # type: str
-    os.getcwd()
-    return (input_path, input_file_type, input_pk_columns,
-            output_path, output_path_bad, output_path_delta,
-            output_file_type, output_file_type_bad, output_file_type_delta,
-            partition_column, partition_column_bad, partition_column_delta,
-            write_mode, write_mode_bad, write_mode_delta)
+    partition_column = options.get("partition_column", None)  # type: str
+    output_file_type = options.get("output_file_type", default_output_file_format)  # type: str
+    write_mode = options.get("write_mode", default_write_mode)  # type: str
+    return (input_path, input_file_type, input_pk_columns, input_opts,
+        output_path, output_path_bad, output_path_delta,
+        output_file_type,
+        partition_column,
+        write_mode)
 
 
 def _copy_new_snapshot_to_history(costs_snapshot_on_disk, input_file_type, input_path):

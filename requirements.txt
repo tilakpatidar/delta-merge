@@ -6,3 +6,5 @@ typing
 flake8
 psutil
 pandas
+py4j
+ipython
