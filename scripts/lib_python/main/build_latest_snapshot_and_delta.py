@@ -93,7 +93,7 @@ def _generate_deltas(costs_snapshot, deltas_till_file, hive_context, sc):
     deltas_till_file = list(filter(lambda x: not is_snapshot_file(x), deltas_till_file))
     if len(deltas_till_file) > 0:
         # Deltas were processed
-        logger.info("Generating delta for ", deltas_till_file)
+        logger.info("Generating delta for %s", deltas_till_file)
         delta = costs_snapshot. \
             where(costs_snapshot['file_id'].isin(deltas_till_file))
         return delta
