@@ -1,19 +1,24 @@
 # -*- coding: utf-8 -*-
-
+import json
 import sys
 
+import logging
 from pyspark import SparkContext, HiveContext, Row
 from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import lit, row_number, col
 from typing import NoReturn, Tuple, List, Optional
 from util.df_util import write_df
+import time
+
+
+logger = logging.getLogger("root")
 
 
 def main(context, options):
     # type: (Tuple[SparkContext, HiveContext], dict) -> NoReturn
-
+    start_time = time.time()
     sc, hive_context = context
-    print "Options ", options
+    logger.info("Options %s", json.dumps(options, indent=2))
     # Read the options
     [input_path,
      input_file_type,
@@ -26,15 +31,13 @@ def main(context, options):
      partition_column,
      write_mode] = read_options_or_load_defaults(options)
 
-    print "Input path %s" % input_path
-    print "Output path %s" % output_path
-    print "Output Bad path %s" % output_path_bad
-    print "Output Delta path %s" % output_path_delta
-
     read_format = hive_context.read.format(input_file_type)
     for k in input_opts:
-        read_format = read_format.option(k, input_opts[k])
+        v = input_opts[k]
+        logger.debug("Applying %s option with value %s on spark input", k, v)
+        read_format = read_format.option(k, v)
     history = read_format.load(input_path)
+    logger.info("Read history data set with schema %s", json.dumps(history.schema.jsonValue(), indent=2))
 
     snapshot, bad, deltas_till_file = compute_snapshot_and_bad_records(history, input_pk_columns, sc, hive_context)
     latest_snapshot_id = _generate_latest_snapshot_id(deltas_till_file)
@@ -45,7 +48,9 @@ def main(context, options):
         .withColumn("file_id", lit(latest_snapshot_id))
 
     # write the good df and bad df
+    logger.info("Write snapshot data set with schema %s", json.dumps(snapshot.schema.jsonValue(), indent=2))
     write_df(snapshot, write_mode, partition_column, output_file_type, output_path)
+    logger.info("Write bad data set with schema %s", json.dumps(bad.schema.jsonValue(), indent=2))
     write_df(bad, write_mode, partition_column, output_file_type, output_path_bad)
 
     # Use the snapshot and bad written on disk
@@ -54,7 +59,9 @@ def main(context, options):
     _copy_new_snapshot_to_history(costs_snapshot_on_disk, input_file_type, input_path)
 
     delta = _generate_deltas(costs_snapshot_on_disk, deltas_till_file, hive_context, sc)
+    logger.info("Write delta data set with schema %s", json.dumps(delta.schema.jsonValue(), indent=2))
     write_df(delta, write_mode, partition_column, output_file_type, output_path_delta)
+    logger.info("Job took %s seconds", (time.time() - start_time))
 
 
 def read_options_or_load_defaults(options):
@@ -76,7 +83,7 @@ def read_options_or_load_defaults(options):
 
 
 def _copy_new_snapshot_to_history(costs_snapshot_on_disk, input_file_type, input_path):
-    print "Copying new snapshot to history"
+    logger.info("Copying new snapshot to history")
     write_df(costs_snapshot_on_disk, "append", "file_id,region_code", input_file_type, input_path)
 
 
@@ -86,7 +93,7 @@ def _generate_deltas(costs_snapshot, deltas_till_file, hive_context, sc):
     deltas_till_file = list(filter(lambda x: not is_snapshot_file(x), deltas_till_file))
     if len(deltas_till_file) > 0:
         # Deltas were processed
-        print "Generating delta for ", deltas_till_file
+        logger.info("Generating delta for ", deltas_till_file)
         delta = costs_snapshot. \
             where(costs_snapshot['file_id'].isin(deltas_till_file))
         return delta
@@ -110,16 +117,15 @@ def compute_snapshot_and_bad_records(history, input_pk_columns, sc, hive_context
     file_ids_df = history.select("file_id").distinct().sort("file_id", ascending=False)
     sorted_file_ids = map(_safe_first_col, file_ids_df.collect())
     latest_file = sorted_file_ids[0]
-    print "Latest file ", latest_file
     if not is_delta_file(latest_file):
         # if the latest file is full or snapshot then just use it for snapshot
         file_type = ("FULL" if is_full_file(latest_file) else "SNAPSHOT")
-        print "Latest %s file %s" % (file_type, latest_file)
+        logger.info("Latest file %s is of type %s", latest_file, file_type)
         snapshot = history.where(history['file_id'] == lit(latest_file))
         # if FULL file then compute delta else for SNAPSHOT leave it
         deltas_till_file = [] if is_snapshot_file(latest_file) else [latest_file]
     else:
-        print "Latest file is a delta file %s" % latest_file
+        logger.info("Latest file %s is a DELTA file", latest_file)
         latest_snapshot_file = get_first_file_id_like(sorted_file_ids, ".SNAPSHOT")
         latest_full_file = get_first_file_id_like(sorted_file_ids, '.FULL')
         recent_file_type = get_recent_type(latest_full_file, latest_snapshot_file)
@@ -130,16 +136,16 @@ def compute_snapshot_and_bad_records(history, input_pk_columns, sc, hive_context
             # if latest full file is more recent than the recent snapshot file
             deltas_till_file = get_deltas_till_file(file_ids_df, latest_file, latest_full_file)
 
-        print "Latest snapshot file %s" % latest_snapshot_file
-        print "Latest full file %s" % latest_full_file
-        print "Most recent is %s" % recent_file_type
-        print "Deltas till latest full file ", deltas_till_file
+        logger.info("Latest snapshot file %s", latest_snapshot_file)
+        logger.info("Latest full file %s", latest_full_file)
+        logger.info("Most recent is %s", recent_file_type)
+        logger.info("Deltas till latest full file %s", deltas_till_file)
 
         snapshot = history.where(history["file_id"].isin(deltas_till_file)) \
             .withColumn("rn", row_number().over(Window.partitionBy(input_pk_columns).orderBy(col("file_id").desc())
                                                 )).where(col("rn") == 1).drop("rn")
     if len(deltas_till_file) == 0:
-        print "No deltas found to merge. Exiting the job."
+        logger.info("No deltas found to merge. Exiting the job.")
         sys.exit(0)
 
     return snapshot, hive_context.createDataFrame(sc.emptyRDD(), snapshot.schema), deltas_till_file
@@ -156,7 +162,7 @@ def _generate_latest_snapshot_id(available_deltas):
     elif is_delta_file(latest_snapshot_id):
         # When latest file is a delta
         latest_snapshot_id = latest_snapshot_id + ".SNAPSHOT"
-    print "Latest snapshot id %s" % latest_snapshot_id
+    logger.info("Latest snapshot id %s", latest_snapshot_id)
     return latest_snapshot_id
 
 
