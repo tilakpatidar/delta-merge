@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import os
 import sys
 
 from pyspark import SparkContext, HiveContext, Row
@@ -59,23 +58,21 @@ def main(context, options):
 
 
 def read_options_or_load_defaults(options):
-    default_output_file_format = "parquet"
-    default_write_mode = "overwrite"
-    input_path = options["input_path"]  # type: str
-    input_file_type = options.get("input_file_type", "parquet")  # type: str
-    input_pk_columns = options.get("input_pk_columns", {})  # type: str
-    input_opts = options.get("input_options", {})  # type: str
-    output_path = options.get("output_path")  # type: str
-    output_path_bad = options.get("output_path_bad")  # type: str
-    output_path_delta = options.get("output_path_delta")  # type: str
-    partition_column = options.get("partition_column", None)  # type: str
-    output_file_type = options.get("output_file_type", default_output_file_format)  # type: str
-    write_mode = options.get("write_mode", default_write_mode)  # type: str
+    input_path = options["input"]["path"]  # type: str
+    input_file_type = options["input"]["file_type"]  # type: str
+    input_pk_columns = options["input"]["pk_columns"]  # type: str
+    input_opts = options["input"]["options"]  # type: str
+    output_path = options["output"]["path"]  # type: str
+    output_path_bad = options["output"]["path_bad"]  # type: str
+    output_path_delta = options["output"]["path_delta"]  # type: str
+    partition_column = options["output"]["partition_column"]  # type: str
+    output_file_type = options["output"]["file_type"]  # type: str
+    write_mode = options["output"]["write_mode"]  # type: str
     return (input_path, input_file_type, input_pk_columns, input_opts,
-        output_path, output_path_bad, output_path_delta,
-        output_file_type,
-        partition_column,
-        write_mode)
+            output_path, output_path_bad, output_path_delta,
+            output_file_type,
+            partition_column,
+            write_mode)
 
 
 def _copy_new_snapshot_to_history(costs_snapshot_on_disk, input_file_type, input_path):

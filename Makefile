@@ -24,3 +24,6 @@ test: clean-pyc clean-build
 
 setup:
 	build_scripts/setup.sh
+
+clean-example:
+	rm -rf examples/costs_bad examples/costs_delta examples/costs_history/file_id=20180727T121212.SNAPSHOT examples/costs_snapshot examples/costs_history/._SUCCESS.crc examples/costs_history/_SUCCESS

@@ -1,14 +1,21 @@
 {
-  "input_path": "examples/costs_history",
-  "input_file_type": "json",
-  "input_options": {
-    "multiLine": true
+  "input": {
+    "path": "examples/costs_history",
+    "file_type": "json",
+    "options": {
+      "multiLine": true
+    },
+    "pk_columns": [
+      "product_id",
+      "region_code"
+    ]
   },
-  "input_pk_columns": ["product_id", "region_code"],
-  "output_path": "examples/costs_snapshot",
-  "output_path_bad": "examples/costs_bad",
-  "output_path_delta": "examples/costs_delta",
-  "output_file_type": "json",
-  "write_mode": "overwrite",
-  "partition_column": "region_code"
+  "output": {
+    "path": "examples/costs_snapshot",
+    "path_bad": "examples/costs_bad",
+    "path_delta": "examples/costs_delta",
+    "file_type": "json",
+    "write_mode": "overwrite",
+    "partition_column": "region_code"
+  }
 }
